@@ -1,7 +1,7 @@
 import os
 import json
 from keygen import generate_elgamal_keypair
-from sign_verify import sign_and_save_vault, verify_vault
+from sign_verify import sign_vault, verify_vault
 
 def main():
     print("=" * 50)
@@ -92,9 +92,13 @@ def main():
             #     print("[!] Please initialize your account first (option 1).")
             #     continue
             
-            sign_and_save_vault(username)
-            
-            result = verify_vault(username)
+            data = "fOJXBnS1nzm4EytdnNFVxU7c6PB1biHxtosreej3LLskp24rl7q8ENtiZoFFhsKXqZgmT4rBpviW9kSDT0PBnUAO9NtNrqh6gZ9sfza2JiUHolqEVTCFzegwF6XItnFY777f"
+
+            sig = sign_vault(username, data)
+           
+
+            result = verify_vault(username, data, sig["r"], sig["s"])
+             
             if result:
                 print("[+] Vault integrity verified. No tampering detected.")
             else:

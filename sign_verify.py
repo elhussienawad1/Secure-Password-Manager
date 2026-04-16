@@ -25,131 +25,78 @@ def vault_to_string(encrypted_vault: str) -> str:
     return encrypted_vault
 
 
-
 def sign_vault(username, vault_data):
     priv = load_private_key(username)
 
-    p = int(priv["p"])
+    p     = int(priv["p"])
     alpha = int(priv["alpha"])
-    x = int(priv["x"])
-
+    x     = int(priv["x"])
+    
     vault_string = vault_to_string(vault_data)
     h = sha256_int(vault_string)
-    
-    # h = sha256_int(vault_data) 
-  
 
     while True:
-        # 2 ≤ k ≤ p-2 coprime with p-1 so that k⁻¹ mod (p−1) exists
+        # 2 ≤ k ≤ q-1 coprime with q so that k⁻¹ mod q exists
         k = secrets.randbelow(p - 3) + 2
         if gcd(k, p - 1) == 1:
             break
 
     #r = α^k mod p O(k) → O(log k)
-    # r= (alpha**k) % p
     r = pow(alpha, k, p)
     
-    #k_inv = k^-1 mod (p-1) 
-    k_inv = pow(k, -1, p - 1)  # modular inverse
+    #k_inv = k^-1 mod q
+    k_inv = pow(k, -1, p - 1)
     
-    #s = k⁻¹ · (H - x·r) mod (p-1)
+    #s = k⁻¹ · (H - x·r) mod q
     s = (k_inv * (h - x * r)) % (p - 1)
     
     while s == 0:
         while True:
-            # 1 < k < p-1 coprime with p-1 so that k⁻¹ mod (p−1) exists
+            # 2 ≤ k ≤ q-1 coprime with q so that k⁻¹ mod q exists
             k = secrets.randbelow(p - 3) + 2
             if gcd(k, p - 1) == 1:
                 break
 
         #r = α^k mod p O(k) → O(log k)
-        # r= (alpha**k) % p
         r = pow(alpha, k, p)
         
-        #k_inv = k^-1 mod (p-1) 
-        k_inv = pow(k, -1, p - 1)  # modular inverse
+        #k_inv = k^-1 mod q
+        k_inv = pow(k, -1, p - 1)
         
-        #s = k⁻¹ · (H - x·r) mod (p-1)
+        #s = k⁻¹ · (H - x·r) mod q
         s = (k_inv * (h - x * r)) % (p - 1)
-        
 
     return {"r": str(r), "s": str(s)}
 
 
-def sign_and_save_vault(username):
-    vault_path = os.path.join("data", username, "vault.json")
-
-    if not os.path.exists(vault_path):
-        print("[!] Vault not found.")
-        return False
-
-    with open(vault_path, "r") as f:
-        vault = json.load(f)
-
-    
-    if "encrypted_vault" not in vault:
-        print("[!] Invalid vault format.")
-        return False
-
-    signature = sign_vault(username, vault["encrypted_vault"])
-    vault["signature"] = signature
-
-    with open(vault_path, "w") as f:
-        json.dump(vault, f, indent=4)
-
-    print("[+] Vault signed successfully.")
-    return True
-
-
-def verify_vault(username):
-    vault_path = os.path.join("data", username, "vault.json")
-
-    if not os.path.exists(vault_path):
-        print("[!] Vault not found.")
-        return False
-
-    with open(vault_path, "r") as f:
-        vault = json.load(f)
-        
-    if "encrypted_vault" not in vault or "signature" not in vault:
-        print("[!] Invalid vault format.")
-        return False
-
-    signature = vault["signature"]
-
-    if "r" not in signature or "s" not in signature:
-        print("[!] Invalid signature format.")
-        return False
-
-    pub = load_public_key(username)
+def verify_vault(username, vault_data, r, s):
+    pub  = load_public_key(username)
     priv = load_private_key(username)
 
-    p = int(pub["p"])
+    p     = int(pub["p"])
     alpha = int(pub["alpha"])
-    y = int(pub["y"])
+    y     = int(pub["y"])
+    x     = int(priv["x"])
+   
 
-    x = int(priv["x"])
     expected_y = pow(alpha, x, p)
     print(f"DEBUG keys match: {y == expected_y}")
 
-    r = int(signature["r"])
-    s = int(signature["s"])
+    r = int(r)  
+    s = int(s)  
 
     if not (1 <= r <= p - 1):
         print("[!] Invalid signature: r out of range.")
         return False
 
-    data = vault["encrypted_vault"]
-    # h = sha256_int(data) % (p - 1)
-    
-    vault_string = vault_to_string(data)
+    vault_string = vault_to_string(vault_data)
     h = sha256_int(vault_string)
-  
 
     print(f"DEBUG h={h}")
     print(f"DEBUG r={r}")
     print(f"DEBUG s={s}")
 
+    # Verify: α^h ≡ y^r · r^s (mod p)
     left  = pow(alpha, h, p)
     right = (pow(y, r, p) * pow(r, s, p)) % p
 
@@ -157,3 +104,14 @@ def verify_vault(username):
     print(f"DEBUG right={right}")
 
     return left == right
+
+
+# --- main ---
+data = "fOJXBnS1nzm4EytdnNFVxU7c6PB1biHxtosreej3LLskp24rl7q8ENtiZoFFhsKXqZgmT4rBpviW9kSDT0PBnUAO9NtNrqh6gZ9sfza2JiUHolqEVTCFzegwF6XItnFY777f"
+
+sig = sign_vault("george", data)
+print("r:", sig["r"])
+print("s:", sig["s"])
+
+result = verify_vault("george", data, sig["r"], sig["s"])
+print("Verified:", result)

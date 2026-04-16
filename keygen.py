@@ -1,9 +1,6 @@
 import os
 import json
-import random
 import secrets
-
-
 
 
 def load_parameters():
@@ -14,7 +11,7 @@ def load_parameters():
         params = json.load(f)
 
     p = int(params["p"], 16)
-    alpha = params["alpha"]
+    alpha = int(params["alpha"])  # ← fix: convert to int
     return p, alpha
 
 def generate_elgamal_keypair(username):
@@ -63,4 +60,3 @@ def generate_elgamal_keypair(username):
     print(f"[+] Public key exported to {export_folder}/{username}_public.json")
 
     return private_key, public_key
-
