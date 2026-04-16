@@ -1,6 +1,10 @@
 import os
 import json
 import random
+import secrets
+
+
+
 
 def load_parameters():
     if not os.path.exists("key.json"):
@@ -17,7 +21,11 @@ def generate_elgamal_keypair(username):
     p, alpha = load_parameters()
 
     #1 < x < p - 1
-    x = random.randint(2, p - 2)
+    #2 ≤ x ≤ p - 2
+    
+    # x = random.randint(2, p - 2)
+    
+    x = secrets.randbelow(p - 3) + 2
 
     # y = alpha^x mod p
     y = pow(alpha, x, p)

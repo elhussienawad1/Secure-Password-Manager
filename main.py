@@ -1,6 +1,7 @@
 import os
 import json
 from keygen import generate_elgamal_keypair
+from sign_verify import sign_and_save_vault, verify_vault
 
 def main():
     print("=" * 50)
@@ -28,7 +29,10 @@ def main():
 
         if choice == "1":
             # Module 1
-            if os.path.exists(f"{username}_private.json"):
+            if not os.path.exists("key.json"):
+                raise FileNotFoundError("[!] key.json not found.")
+            
+            if os.path.exists(os.path.join("data", username, "private.json")):
                 print("[!] Account already initialized.")
             else:
                 generate_elgamal_keypair(username)
@@ -82,16 +86,19 @@ def main():
         #     master_password = input("Master password: ").strip()
         #     list_credentials(username, master_password)
 
-        # elif choice == "7":
-        #     # Module 3 - Verify vault integrity
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     result = verify_vault(username)
-        #     if result:
-        #         print("[+] Vault integrity verified. No tampering detected.")
-        #     else:
-        #         print("[!!!] ALERT: Vault integrity check FAILED. Vault may have been tampered with!")
+        elif choice == "7":
+            # Module 3 - Verify vault integrity
+            # if not os.path.exists(f"{username}_private.json"):
+            #     print("[!] Please initialize your account first (option 1).")
+            #     continue
+            
+            sign_and_save_vault(username)
+            
+            result = verify_vault(username)
+            if result:
+                print("[+] Vault integrity verified. No tampering detected.")
+            else:
+                print("[!!!] ALERT: Vault integrity check FAILED. Vault may have been tampered with!")
 
         # elif choice == "8":
         #     # Module 4 - Export
