@@ -1,8 +1,10 @@
 import os
 import json
 import random
+import string
+import typing
 
-def load_parameters():
+def load_parameters() -> int:
     if not os.path.exists("key.json"):
         print("[!] key.json not found.")
 
@@ -13,7 +15,7 @@ def load_parameters():
     alpha = params["alpha"]
     return p, alpha
 
-def generate_elgamal_keypair(username):
+def generate_elgamal_keypair(username:string)->float:
     p, alpha = load_parameters()
 
     #1 < x < p - 1
