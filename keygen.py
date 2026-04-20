@@ -1,5 +1,7 @@
 import os
 import json
+import secrets
+
 import random
 import string
 import typing
@@ -12,14 +14,18 @@ def load_parameters() -> int:
         params = json.load(f)
 
     p = int(params["p"], 16)
-    alpha = params["alpha"]
+    alpha = int(params["alpha"])  # ← fix: convert to int
     return p, alpha
 
 def generate_elgamal_keypair(username:string)->float:
     p, alpha = load_parameters()
 
     #1 < x < p - 1
-    x = random.randint(2, p - 2)
+    #2 ≤ x ≤ p - 2
+    
+    # x = random.randint(2, p - 2)
+    
+    x = secrets.randbelow(p - 3) + 2
 
     # y = alpha^x mod p
     y = pow(alpha, x, p)
@@ -57,4 +63,3 @@ def generate_elgamal_keypair(username:string)->float:
     print(f"[+] Public key exported to {export_folder}/{username}_public.json")
 
     return private_key, public_key
-
