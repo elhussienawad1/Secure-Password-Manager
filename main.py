@@ -2,6 +2,7 @@ import os
 import json
 from keygen import generate_elgamal_keypair
 from sign_verify import sign_vault, verify_vault
+from vault import add_credential, retrieve_credential, update_credential, delete_credential, list_credentials
 
 def main():
     print("=" * 50)
@@ -38,67 +39,73 @@ def main():
                 generate_elgamal_keypair(username)
                 print("[+] Account initialized successfully.")
 
-        # elif choice == "2":
-        #     # Module 2 - Add
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     master_password = input("Master password: ").strip()
-        #     website  = input("Website: ").strip()
-        #     user     = input("Username for site: ").strip()
-        #     password = input("Password for site: ").strip()
-        #     add_credential(username, master_password, website, user, password)
-
-        # elif choice == "3":
-        #     # Module 2 - Retrieve
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     master_password = input("Master password: ").strip()
-        #     website = input("Website to retrieve: ").strip()
-        #     retrieve_credential(username, master_password, website)
-
-        # elif choice == "4":
-        #     # Module 2 - Update
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     master_password  = input("Master password: ").strip()
-        #     website          = input("Website to update: ").strip()
-        #     new_user         = input("New username (leave blank to keep): ").strip()
-        #     new_password     = input("New password (leave blank to keep): ").strip()
-        #     update_credential(username, master_password, website, new_user, new_password)
-
-        # elif choice == "5":
-        #     # Module 2 - Delete
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     master_password = input("Master password: ").strip()
-        #     website         = input("Website to delete: ").strip()
-        #     delete_credential(username, master_password, website)
-
-        # elif choice == "6":
-        #     # Module 2 - List all
-        #     if not os.path.exists(f"{username}_private.json"):
-        #         print("[!] Please initialize your account first (option 1).")
-        #         continue
-        #     master_password = input("Master password: ").strip()
-        #     list_credentials(username, master_password)
-
-        elif choice == "7":
-            # Module 3 - Verify vault integrity
+        elif choice == "2":
+            # Module 2 - Add
             # if not os.path.exists(f"{username}_private.json"):
             #     print("[!] Please initialize your account first (option 1).")
             #     continue
-            
-            data = "fOJXBnS1nzm4EytdnNFVxU7c6PB1biHxtosreej3LLskp24rl7q8ENtiZoFFhsKXqZgmT4rBpviW9kSDT0PBnUAO9NtNrqh6gZ9sfza2JiUHolqEVTCFzegwF6XItnFY777f"
+            master_password = input("Master password: ").strip()
+            website  = input("Website: ").strip()
+            user     = input("Username for site: ").strip()
+            password = input("Password for site: ").strip()
+            add_credential(username, master_password, website, user, password)
 
-            sig = sign_vault(username, data)
-           
+        elif choice == "3":
+            # Module 2 - Retrieve
+            # if not os.path.exists(f"{username}_private.json"):
+            #     print("[!] Please initialize your account first (option 1).")
+            #     continue
+            master_password = input("Master password: ").strip()
+            website = input("Website to retrieve: ").strip()
+            retrieve_credential(username, master_password, website)
 
-            result = verify_vault(username, data, sig["r"], sig["s"])
-             
+        elif choice == "4":
+            # Module 2 - Update
+            # if not os.path.exists(f"{username}_private.json"):
+            #     print("[!] Please initialize your account first (option 1).")
+            #     continue
+            master_password  = input("Master password: ").strip()
+            website          = input("Website to update: ").strip()
+            new_user         = input("New username (leave blank to keep): ").strip()
+            new_password     = input("New password (leave blank to keep): ").strip()
+            update_credential(username, master_password, website, new_user, new_password)
+
+        elif choice == "5":
+            # Module 2 - Delete
+            # if not os.path.exists(f"{username}_private.json"):
+            #     print("[!] Please initialize your account first (option 1).")
+            #     continue
+            master_password = input("Master password: ").strip()
+            website         = input("Website to delete: ").strip()
+            delete_credential(username, master_password, website)
+
+        elif choice == "6":
+            # Module 2 - List all
+            # if not os.path.exists(f"{username}_private.json"):
+            #     print("[!] Please initialize your account first (option 1).")
+            #     continue
+            master_password = input("Master password: ").strip()
+            list_credentials(username, master_password)
+
+        elif choice == "7":
+            if not os.path.exists(f"data/{username}/private.json"):
+                print("[!] Please initialize your account first (option 1).")
+                continue
+
+            vault_path = os.path.join("data", username, "vault.json")
+            if not os.path.exists(vault_path):
+                print("[!] No vault found. Add a credential first.")
+                continue
+
+            with open(vault_path, "r") as f:
+                vault_file = json.load(f)
+
+            encrypted_vault = vault_file["encrypted_vault"]
+            sig_parts = vault_file["signature"].split(":")
+            r = sig_parts[0]
+            s = sig_parts[1]
+
+            result = verify_vault(username, encrypted_vault, r, s)
             if result:
                 print("[+] Vault integrity verified. No tampering detected.")
             else:
