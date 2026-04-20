@@ -4,10 +4,11 @@
 
 import math
 import random
+import typing
 import json
 import os
 
-def is_prime(n):
+def is_prime(n:int) -> bool:
     
     if n < 2:
         return False
@@ -28,7 +29,7 @@ def is_prime(n):
     return True
 
 #generate P
-def generate_large_prime(bits=512):
+def generate_large_prime(bits:int = 512) -> int:
     while True:
         
         number = random.getrandbits(bits)
@@ -44,10 +45,9 @@ def generate_large_prime(bits=512):
             
         if is_prime(number):
             return number
-        
+
 #generate alpha
-def get_prime_factors(n):
-    
+def get_prime_factors(n:int) -> typing.Set[int]:
     factors = set()
     d = 2
     temp = n
