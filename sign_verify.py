@@ -80,7 +80,7 @@ def verify_vault(username, vault_data, r, s):
    
 
     expected_y = pow(alpha, x, p)
-    print(f"DEBUG keys match: {y == expected_y}")
+    # print(f"DEBUG keys match: {y == expected_y}")
 
     r = int(r)  
     s = int(s)  
@@ -92,26 +92,17 @@ def verify_vault(username, vault_data, r, s):
     vault_string = vault_to_string(vault_data)
     h = sha256_int(vault_string)
 
-    print(f"DEBUG h={h}")
-    print(f"DEBUG r={r}")
-    print(f"DEBUG s={s}")
+        # print(f"DEBUG h={h}")
+        # print(f"DEBUG r={r}")
+        # print(f"DEBUG s={s}")
 
     # Verify: α^h ≡ y^r · r^s (mod p)
     left  = pow(alpha, h, p)
     right = (pow(y, r, p) * pow(r, s, p)) % p
 
-    print(f"DEBUG left={left}")
-    print(f"DEBUG right={right}")
+    # print(f"DEBUG left={left}")
+    # print(f"DEBUG right={right}")
 
     return left == right
 
 
-# --- main ---
-data = "fOJXBnS1nzm4EytdnNFVxU7c6PB1biHxtosreej3LLskp24rl7q8ENtiZoFFhsKXqZgmT4rBpviW9kSDT0PBnUAO9NtNrqh6gZ9sfza2JiUHolqEVTCFzegwF6XItnFY777f"
-
-sig = sign_vault("george", data)
-print("r:", sig["r"])
-print("s:", sig["s"])
-
-result = verify_vault("george", data, sig["r"], sig["s"])
-print("Verified:", result)
