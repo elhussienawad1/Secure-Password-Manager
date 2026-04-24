@@ -20,7 +20,7 @@ from src.keygen import generate_elgamal_keypair
 # ---------------------------------------------------------------------------
 TEST_USER = "test_keygen_user"
 PRIVATE_PATH = os.path.join("data", TEST_USER, "private.json")
-PUBLIC_PATH = f"Export/{TEST_USER}_public.json"
+PUBLIC_PATH = os.path.join("data", "Export", f"{TEST_USER}_public.json")
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,6 @@ def _remove_keys():
     shutil.rmtree(os.path.join("data", TEST_USER), ignore_errors=True)
     if os.path.exists(PUBLIC_PATH):
         os.remove(PUBLIC_PATH)
-
 
 # ---------------------------------------------------------------------------
 # 1. File creation tests
@@ -153,8 +152,9 @@ class TestKeyUniqueness:
             assert x1 != x2, "Two different users got the same private key"
         finally:
             shutil.rmtree(os.path.join("data", user2), ignore_errors=True)
-            if os.path.exists(f"{user2}_public.json"):
-                os.remove(f"{user2}_public.json")
+            pub2 = os.path.join("data", "Export", f"{user2}_public.json")
+            if os.path.exists(pub2):
+                os.remove(pub2)
 
     def test_two_calls_produce_different_keys(self):
         """Calling generate twice should produce different key material."""
