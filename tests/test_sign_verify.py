@@ -8,8 +8,8 @@ import json
 import shutil
 import pytest
 
-from keygen import generate_elgamal_keypair
-from sign_verify import sign_vault, verify_vault
+from src.keygen import generate_elgamal_keypair
+from src.sign_verify import sign_vault, verify_vault
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ class TestSignatureRandomness:
 class TestSignatureVaultIntegration:
     def test_vault_file_signature_field_is_valid(self):
         """After a vault operation, the stored signature must verify correctly."""
-        from vault import add_credential
+        from src.vault import add_credential
 
         master_pw = "MasterPW!"
         add_credential(USER_A, master_pw, "example.com", "user", "pw")
@@ -202,7 +202,7 @@ class TestSignatureVaultIntegration:
 
     def test_manual_edit_to_vault_file_breaks_signature(self):
         """Editing the vault JSON by hand must cause verify_vault to return False."""
-        from vault import add_credential
+        from src.vault import add_credential
 
         master_pw = "MasterPW!"
         add_credential(USER_A, master_pw, "tamper.com", "user", "pw")

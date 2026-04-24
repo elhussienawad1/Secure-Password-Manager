@@ -1,8 +1,8 @@
 import os
 import json
-from keygen import generate_elgamal_keypair
-from sign_verify import sign_vault, verify_vault
-from vault import add_credential, retrieve_credential, update_credential, delete_credential, list_credentials
+from src.keygen import generate_elgamal_keypair
+from src.sign_verify import sign_vault, verify_vault
+from src.vault import add_credential, retrieve_credential, update_credential, delete_credential, list_credentials
 from src.key_exchange import export_vault
 
 

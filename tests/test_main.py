@@ -10,7 +10,7 @@ import shutil
 import pytest
 from unittest.mock import patch, call, MagicMock
 
-import main as app
+import src.main as app
 
 
 # ---------------------------------------------------------------------------

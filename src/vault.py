@@ -2,7 +2,7 @@ import os
 import json
 from Crypto.Cipher import AES
 import hashlib
-from sign_verify import sign_vault, verify_vault
+from src.sign_verify import sign_vault, verify_vault
 
 # Get AES key from master password
 # same output for same input 

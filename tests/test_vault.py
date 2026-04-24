@@ -8,8 +8,8 @@ import json
 import shutil
 import pytest
 
-from keygen import generate_elgamal_keypair
-from vault import (
+from src.keygen import generate_elgamal_keypair
+from src.vault import (
     add_credential,
     retrieve_credential,
     update_credential,
@@ -128,7 +128,7 @@ class TestRetrieveCredential:
         # Must never expose the stored credential
         assert "mypassword" not in out
 
-        
+
     def test_retrieve_correct_data_after_multiple_adds(self, capsys):
         _add("a.com", "userA", "passA")
         _add("b.com", "userB", "passB")

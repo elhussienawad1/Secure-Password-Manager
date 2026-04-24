@@ -1,7 +1,7 @@
 import os
 import random  # fix: was "from random import random"
 import json
-from utltis import generate_large_prime
+from src.utltis import generate_large_prime
 
 def generate_dh_parameters(bits: int = 512) -> dict:
     q = generate_large_prime(bits)

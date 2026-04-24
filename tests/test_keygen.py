@@ -12,7 +12,7 @@ from unittest.mock import patch
 # ---------------------------------------------------------------------------
 # Adjust this import if your module is named differently
 # ---------------------------------------------------------------------------
-from keygen import generate_elgamal_keypair
+from src.keygen import generate_elgamal_keypair
 
 
 # ---------------------------------------------------------------------------
