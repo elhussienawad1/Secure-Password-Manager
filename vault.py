@@ -36,7 +36,7 @@ def decrypt_data(key, encrypted_data):
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce) # Create a new AES cipher in GCM mode with the nonce already saved
     plaintext = cipher.decrypt_and_verify(ciphertext, tag) # Decrypt the ciphertext and verify the tag
 
-    return plaintext.decode()  # Convert the decrypted plaintext from bytes to string and return it 
+    return plaintext.decode()  # Convert the decry4pted plaintext from bytes to string and return it 
 
 
 def load_vault(username, master_password):
@@ -190,3 +190,6 @@ def list_credentials(username, master_password):
     print("  " + "-" * 65)
     for entry in credentials:
         print(f"  {entry['website']:<25} {entry['username']:<25} {entry['password']}")
+
+
+

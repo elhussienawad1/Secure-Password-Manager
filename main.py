@@ -3,6 +3,8 @@ import json
 from keygen import generate_elgamal_keypair
 from sign_verify import sign_vault, verify_vault
 from vault import add_credential, retrieve_credential, update_credential, delete_credential, list_credentials
+from src.key_exchange import export_vault
+
 
 def main():
     print("=" * 50)
@@ -111,17 +113,17 @@ def main():
             else:
                 print("[!!!] ALERT: Vault integrity check FAILED. Vault may have been tampered with!")
 
-        # elif choice == "8":
+        elif choice == "8":
         #     # Module 4 - Export
         #     if not os.path.exists(f"{username}_private.json"):
         #         print("[!] Please initialize your account first (option 1).")
         #         continue
-        #     master_password = input("Master password: ").strip()
-        #     recipient       = input("Recipient username: ").strip()
-        #     if not os.path.exists(f"{recipient}_public.json"):
-        #         print(f"[!] Public key for '{recipient}' not found.")
-        #         continue
-        #     export_vault(username, master_password, recipient)
+            master_password = input("Master password: ").strip()
+            recipient       = input("Recipient username: ").strip()
+            if not os.path.exists(f"{recipient}_public.json"):
+                print(f"[!] Public key for '{recipient}' not found.")
+                continue
+            export_vault(username, master_password, recipient)
 
         # elif choice == "9":
         #     # Module 4 - Import
