@@ -69,13 +69,13 @@ def export_vault(username: str, master_password: str, recipient: str):
     print("[*] Verifying Device 2's DH public key signature...")
     if not verify_vault(recipient, str(d2_pub), r2, s2):
         print("[!!!] Device 2 DH public key signature invalid. Aborting export.")
-        return
+        return (False, "Device 2 DH public key signature invalid.")
 
     # --- Device 2 verifies Device 1's signature ---
     print("[*] Verifying Device 1's DH public key signature...")
     if not verify_vault(username, str(d1_pub), r1, s1):
         print("[!!!] Device 1 DH public key signature invalid. Aborting export.")
-        return
+        return (False, "Device 1 DH public key signature invalid.")
 
     print("[+] Both DH public key signatures verified successfully.")
 
@@ -83,7 +83,7 @@ def export_vault(username: str, master_password: str, recipient: str):
     vault_path = os.path.join("data", username, "vault.json")
     if not os.path.exists(vault_path):
         print("[!] Vault not found.")
-        return
+        return (False, "Vault not found.")
 
     with open(vault_path, "r") as f:
         vault_file = json.load(f)
@@ -94,7 +94,13 @@ def export_vault(username: str, master_password: str, recipient: str):
         plaintext_entries = decrypt_data(aes_key, vault_file["encrypted_vault"])
     except Exception:
         print("[!] Failed to decrypt vault. Wrong master password?")
-        return
+        return (False, "Failed to decrypt vault. Wrong master password?")
+
+    # --- Check if vault is empty ---
+    credentials = json.loads(plaintext_entries)
+    if len(credentials) == 0:
+        print("[!] Cannot export empty vault. Add credentials first.")
+        return (False, "Cannot export empty vault. Add credentials first.")
 
     # --- Compute shared secret and derive session key ---
     shared_secret = compute_shared_secret(d2_pub, d1_priv, q)
@@ -130,6 +136,7 @@ def export_vault(username: str, master_password: str, recipient: str):
         json.dump({"d2_priv": d2_priv}, f)
 
     print(f"[+] Vault exported successfully to {export_path}")
+    return (True, "Vault exported successfully.")
 
 
 def import_vault(username: str, master_password: str, sender: str):
