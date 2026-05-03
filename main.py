@@ -2,7 +2,14 @@ import os
 import json
 from src.keygen import generate_elgamal_keypair
 from src.sign_verify import sign_vault, verify_vault
-from src.vault import add_credential, retrieve_credential, update_credential, delete_credential, list_credentials
+from src.vault import (
+    add_credential,
+    retrieve_credential,
+    update_credential,
+    delete_credential,
+    list_credentials,
+    initialize_vault,
+)
 from src.key_exchange import export_vault,import_vault
 
 
@@ -26,6 +33,7 @@ def main():
         print("7. Verify vault integrity")
         print("8. Export vault to another user")
         print("9. Import vault from another user")
+        print("10. Initialize vault / set master password")
         print("0. Exit")
 
         choice = input("\nChoice: ").strip()
@@ -96,7 +104,7 @@ def main():
 
             vault_path = os.path.join("data", username, "vault.json")
             if not os.path.exists(vault_path):
-                print("[!] No vault found. Add a credential first.")
+                print("[!] No vault found. Initialize the vault (option 10), then add credentials.")
                 continue
 
             with open(vault_path, "r") as f:
@@ -120,7 +128,7 @@ def main():
         #         continue
             master_password = input("Master password: ").strip()
             recipient       = input("Recipient username: ").strip()
-            if not os.path.exists(f"{recipient}_public.json"):
+            if not os.path.exists(f"data/Export/{recipient}_public.json"):
                 print(f"[!] Public key for '{recipient}' not found.")
                 continue
             export_vault(username, master_password, recipient)
@@ -133,6 +141,21 @@ def main():
             sender          = input("Sender username: ").strip()
             master_password = input("Enter your new master password for the imported vault: ").strip()
             import_vault(username, master_password, sender)
+
+        elif choice == "10":
+            priv_path = os.path.join("data", username, "private.json")
+            if not os.path.exists(priv_path):
+                print(
+                    "[!] No signing keys found. Run option 1 (Initialize account / generate keys) first, "
+                    "then initialize the vault."
+                )
+                continue
+            master_password = input("Choose master password: ").strip()
+            confirm_password = input("Confirm master password: ").strip()
+            if master_password != confirm_password:
+                print("[!] Passwords do not match.")
+                continue
+            initialize_vault(username, master_password)
 
         elif choice == "0":
             print("\nGoodbye!")

@@ -15,6 +15,7 @@ from src.vault import (
     update_credential,
     delete_credential,
     list_credentials,
+    initialize_vault,
 )
 
 
@@ -35,6 +36,7 @@ def setup_user():
     """Create a fresh user account before each test, clean up after."""
     _clean()
     generate_elgamal_keypair(TEST_USER)
+    initialize_vault(TEST_USER, MASTER_PW)
     yield
     _clean()
 
@@ -54,8 +56,7 @@ def _add(website="example.com", user="alice", password="pass123"):
 # 1. Add credential
 # ---------------------------------------------------------------------------
 class TestAddCredential:
-    def test_vault_file_created_after_add(self):
-        _add()
+    def test_initialized_vault_file_exists(self):
         assert os.path.exists(VAULT_PATH)
 
     def test_vault_file_is_valid_json(self):
@@ -94,6 +95,30 @@ class TestAddCredential:
         with open(VAULT_PATH) as f:
             data = json.load(f)
         assert "encrypted_vault" in data
+
+
+# ---------------------------------------------------------------------------
+# Vault must exist before credential operations
+# ---------------------------------------------------------------------------
+class TestVaultRequiresInitialization:
+    @pytest.fixture
+    def user_keys_only(self):
+        u = "test_vault_noinit"
+        shutil.rmtree(os.path.join("data", u), ignore_errors=True)
+        export_pub = os.path.join("data", "Export", f"{u}_public.json")
+        if os.path.exists(export_pub):
+            os.remove(export_pub)
+        generate_elgamal_keypair(u)
+        yield u
+        shutil.rmtree(os.path.join("data", u), ignore_errors=True)
+        if os.path.exists(export_pub):
+            os.remove(export_pub)
+
+    def test_add_fails_until_vault_initialized(self, capsys, user_keys_only):
+        add_credential(user_keys_only, MASTER_PW, "a.com", "u", "p")
+        out = capsys.readouterr().out
+        assert os.path.isfile(os.path.join("data", user_keys_only, "vault.json")) is False
+        assert "vault" in out.lower() or "initialized" in out.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +316,7 @@ class TestEncryptionCorrectness:
         user2 = "test_vault_user2"
         try:
             generate_elgamal_keypair(user2)
+            initialize_vault(user2, "AnotherMasterPW!")
             add_credential(user2, "AnotherMasterPW!", "site.com", "user", "pw")
             add_credential(TEST_USER, MASTER_PW, "site.com", "user", "pw")
 
