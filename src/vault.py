@@ -34,9 +34,12 @@ def decrypt_data(key, encrypted_data):
     tag = bytes.fromhex(parts[2]) 
 
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce) # Create a new AES cipher in GCM mode with the nonce already saved
-    plaintext = cipher.decrypt_and_verify(ciphertext, tag) # Decrypt the ciphertext and verify the tag
-
-    return plaintext.decode()  # Convert the decry4pted plaintext from bytes to string and return it 
+    try:
+        plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+        return plaintext.decode()
+    except ValueError:
+        print("[!] Wrong master password. Could not decrypt vault.")
+        return None   
 
 
 def load_vault(username, master_password):
@@ -62,13 +65,16 @@ def load_vault(username, master_password):
     
     key = get_aes_key(master_password)
     credentials = decrypt_data(key, encrypted_vault)
+
+    if credentials is None:
+        return None      
     
     return json.loads(credentials) # Convert the decrypted JSON string back to a Python list 
 
 
 def save_vault(username, master_password, vault_data):
     vault_path = os.path.join("data", username, "vault.json")
-    
+    os.makedirs(os.path.join("data", username), exist_ok=True) # Create the user directory if it doesn't exist
     key = get_aes_key(master_password)
     plaintext = json.dumps(vault_data) # converts your Python list back into a JSON string 
     encrypted_vault = encrypt_data(key, plaintext)
@@ -91,7 +97,7 @@ def add_credential(username, master_password, website, user, password):
     credentials = load_vault(username, master_password)
     
     if credentials is None:
-        print("[!!!] Cannot add. Vault integrity check failed.")
+        print("[!!!] Cannot add. Aborting.")
         return
     
     for entry in credentials:
@@ -117,7 +123,7 @@ def retrieve_credential(username, master_password, website):
     credentials = load_vault(username, master_password)
 
     if credentials is None:
-        print("[!!!] Cannot retrieve. Vault integrity check failed.")
+        print("[!!!] Cannot retrieve. Aborting.")
         return
 
     #search for selected entery and print it if found, otherwise print not found message
@@ -135,7 +141,7 @@ def update_credential(username, master_password, website, new_user, new_password
     credentials = load_vault(username, master_password)
 
     if credentials is None:
-        print("[!!!] Cannot update. Vault integrity check failed.")
+        print("[!!!] Cannot update. Aborting.")
         return
 
     for entry in credentials:
@@ -161,7 +167,7 @@ def delete_credential(username, master_password, website):
     credentials = load_vault(username, master_password)
 
     if credentials is None:
-        print("[!!!] Cannot delete. Vault integrity check failed.")
+        print("[!!!] Cannot delete. Aborting.")
         return
 
     #search for the selected entry and delete it if found
@@ -179,7 +185,7 @@ def list_credentials(username, master_password):
     credentials = load_vault(username, master_password)
 
     if credentials is None:
-        print("[!!!] Cannot list. Vault integrity check failed.")
+        print("[!!!] Cannot list. Aborting.")
         return
 
     if len(credentials) == 0:
