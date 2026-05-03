@@ -4,7 +4,7 @@ import secrets
 
 import random
 import string
-import typing
+
 
 def load_parameters() -> int:
     if not os.path.exists("key.json"):
@@ -14,7 +14,7 @@ def load_parameters() -> int:
         params = json.load(f)
 
     p = int(params["p"], 16)
-    alpha = int(params["alpha"])  # ← fix: convert to int
+    alpha = int(params["alpha"])  
     return p, alpha
 
 def generate_elgamal_keypair(username:string)->float:
@@ -38,9 +38,9 @@ def generate_elgamal_keypair(username:string)->float:
 
     private_key = {
         "username": username,
-        "p": str(p),
-        "alpha": str(alpha),
-        "x": str(x)
+        "p": p,        
+        "alpha": alpha, 
+        "x": x         
     }
 
     with open(os.path.join(user_folder, "private.json"), "w") as f:
@@ -53,9 +53,9 @@ def generate_elgamal_keypair(username:string)->float:
 
     public_key = {
         "username": username,
-        "p": str(p),
-        "alpha": str(alpha),
-        "y": str(y)
+        "p": p,          
+        "alpha": alpha,  
+        "y": y          
     }
 
     with open(os.path.join(export_folder, f"{username}_public.json"), "w") as f:

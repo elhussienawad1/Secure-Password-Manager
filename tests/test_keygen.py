@@ -9,9 +9,6 @@ import shutil
 import pytest
 from unittest.mock import patch
 
-# ---------------------------------------------------------------------------
-# Adjust this import if your module is named differently
-# ---------------------------------------------------------------------------
 from src.keygen import generate_elgamal_keypair
 
 
@@ -39,6 +36,7 @@ def _remove_keys():
     if os.path.exists(PUBLIC_PATH):
         os.remove(PUBLIC_PATH)
 
+
 # ---------------------------------------------------------------------------
 # 1. File creation tests
 # ---------------------------------------------------------------------------
@@ -54,6 +52,10 @@ class TestKeyFilesCreated:
     def test_data_directory_is_created(self):
         generate_elgamal_keypair(TEST_USER)
         assert os.path.isdir(os.path.join("data", TEST_USER))
+
+    def test_export_directory_is_created(self):
+        generate_elgamal_keypair(TEST_USER)
+        assert os.path.isdir(os.path.join("data", "Export"))
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,22 @@ class TestKeyStructure:
         with open(PRIVATE_PATH) as f:
             priv = json.load(f)
         assert isinstance(priv["x"], int)
+
+    def test_public_key_is_valid_json(self):
+        generate_elgamal_keypair(TEST_USER)
+        try:
+            with open(PUBLIC_PATH) as f:
+                json.load(f)
+        except json.JSONDecodeError:
+            pytest.fail("Public key file is not valid JSON")
+
+    def test_private_key_is_valid_json(self):
+        generate_elgamal_keypair(TEST_USER)
+        try:
+            with open(PRIVATE_PATH) as f:
+                json.load(f)
+        except json.JSONDecodeError:
+            pytest.fail("Private key file is not valid JSON")
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +150,13 @@ class TestElGamalMath:
             pub = json.load(f)
         assert pub["y"] != 0
 
+    def test_y_is_within_valid_range(self):
+        """y must be in range (0, p)"""
+        generate_elgamal_keypair(TEST_USER)
+        with open(PUBLIC_PATH) as f:
+            pub = json.load(f)
+        assert 0 < pub["y"] < pub["p"], "y is out of valid range (0, p)"
+
 
 # ---------------------------------------------------------------------------
 # 4. Key uniqueness (different users / repeated calls)
@@ -170,6 +195,25 @@ class TestKeyUniqueness:
 
         assert x1 != x2, "Repeated key generation produced identical keys"
 
+    def test_different_users_get_different_public_keys(self):
+        """Different users should have different y values."""
+        user2 = "test_keygen_user2"
+        try:
+            generate_elgamal_keypair(TEST_USER)
+            generate_elgamal_keypair(user2)
+
+            with open(PUBLIC_PATH) as f:
+                y1 = json.load(f)["y"]
+            with open(os.path.join("data", "Export", f"{user2}_public.json")) as f:
+                y2 = json.load(f)["y"]
+
+            assert y1 != y2, "Two different users got the same public key y"
+        finally:
+            shutil.rmtree(os.path.join("data", user2), ignore_errors=True)
+            pub2 = os.path.join("data", "Export", f"{user2}_public.json")
+            if os.path.exists(pub2):
+                os.remove(pub2)
+
 
 # ---------------------------------------------------------------------------
 # 5. Private key isolation
@@ -189,3 +233,29 @@ class TestPrivateKeyIsolation:
             priv = json.load(f)
         # The critical check: private file must have x
         assert "x" in priv
+
+    def test_y_not_in_private_file(self):
+        """y is a public value and should not be stored in the private key file."""
+        generate_elgamal_keypair(TEST_USER)
+        with open(PRIVATE_PATH) as f:
+            priv = json.load(f)
+        assert "y" not in priv, "Public value 'y' should not appear in the private key file"
+
+
+# ---------------------------------------------------------------------------
+# 6. Return value tests
+# ---------------------------------------------------------------------------
+class TestReturnValue:
+    def test_returns_tuple_of_two_dicts(self):
+        result = generate_elgamal_keypair(TEST_USER)
+        assert isinstance(result, tuple), "Should return a tuple"
+        assert len(result) == 2, "Should return (private_key, public_key)"
+
+    def test_returned_private_key_has_x(self):
+        priv, pub = generate_elgamal_keypair(TEST_USER)
+        assert "x" in priv
+
+    def test_returned_public_key_has_required_fields(self):
+        priv, pub = generate_elgamal_keypair(TEST_USER)
+        for field in ("p", "alpha", "y"):
+            assert field in pub, f"Returned public key missing field: {field}"
