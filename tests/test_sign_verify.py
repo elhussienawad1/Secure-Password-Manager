@@ -270,9 +270,10 @@ class TestInputTypes:
 class TestSignatureVaultIntegration:
     def test_vault_file_signature_field_is_valid(self):
         """After a vault operation, the stored signature must verify correctly."""
-        from src.vault import add_credential
+        from src.vault import add_credential, initialize_vault
 
         master_pw = "MasterPW!"
+        initialize_vault(USER_A, master_pw)
         add_credential(USER_A, master_pw, "example.com", "user", "pw")
 
         vault_path = os.path.join("data", USER_A, "vault.json")
@@ -287,9 +288,10 @@ class TestSignatureVaultIntegration:
 
     def test_manual_edit_to_vault_file_breaks_signature(self):
         """Editing the vault JSON by hand must cause verify_vault to return False."""
-        from src.vault import add_credential
+        from src.vault import add_credential, initialize_vault
 
         master_pw = "MasterPW!"
+        initialize_vault(USER_A, master_pw)
         add_credential(USER_A, master_pw, "tamper.com", "user", "pw")
 
         vault_path = os.path.join("data", USER_A, "vault.json")
@@ -304,9 +306,10 @@ class TestSignatureVaultIntegration:
 
     def test_multiple_credentials_signature_still_valid(self):
         """Adding multiple credentials should still produce a valid signature."""
-        from src.vault import add_credential
+        from src.vault import add_credential, initialize_vault
 
         master_pw = "MasterPW!"
+        initialize_vault(USER_A, master_pw)
         add_credential(USER_A, master_pw, "site1.com", "user1", "pw1")
         add_credential(USER_A, master_pw, "site2.com", "user2", "pw2")
         add_credential(USER_A, master_pw, "site3.com", "user3", "pw3")

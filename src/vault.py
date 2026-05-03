@@ -1,142 +1,162 @@
 import os
 import json
-from Crypto.Cipher import AES
 import hashlib
+from Crypto.Cipher import AES
+
 from src.sign_verify import sign_vault, verify_vault
 
 
-def _normalize_website(website):
+def _vault_path(username):
+    return os.path.join("data", username, "vault.json")
+
+
+def normalize_website(website):
+    """Case-insensitive site matching; used by vault and vault import/export merge logic."""
     return website.strip().lower()
 
-# Get AES key from master password
-# same output for same input 
+
+def vault_is_initialized(username):
+    return os.path.isfile(_vault_path(username))
+
+
 def get_aes_key(master_password):
-    bytePassword = master_password.encode() # Convert string to bytes
-    key = hashlib.sha256(bytePassword).digest() #.digest() returns bytes
+    bytePassword = master_password.encode()
+    key = hashlib.sha256(bytePassword).digest()
     return key
 
-# encrypt the vault data using AES-GCM
+
+def initialize_vault(username, master_password):
+    if vault_is_initialized(username):
+        print("[!] Vault already initialized.")
+        return
+    save_vault(username, master_password, [])
+    print("[+] Vault initialized successfully.")
+
+
 def encrypt_data(key, plaintext):
-    cipher = AES.new(key, AES.MODE_GCM) # Create a new AES cipher in GCM mode and generate a random nonce
+    cipher = AES.new(key, AES.MODE_GCM)
     bytePlaintext = plaintext.encode()
-    ciphertext, tag = cipher.encrypt_and_digest(bytePlaintext) # Encrypt the plaintext and compute the tag
-    
-    nonce_hex = cipher.nonce.hex() 
+    ciphertext, tag = cipher.encrypt_and_digest(bytePlaintext)
+
+    nonce_hex = cipher.nonce.hex()
     ciphertext_hex = ciphertext.hex()
     tag_hex = tag.hex()
-    
+
     return nonce_hex + ":" + ciphertext_hex + ":" + tag_hex
 
 
-# decrypt the vault data using AES-GCM
 def decrypt_data(key, encrypted_data):
-    parts = encrypted_data.split(":") # Split the encrypted data into nonce, ciphertext, and tag
+    parts = encrypted_data.split(":")
 
-    # convert the hex strings back to bytes
-    nonce = bytes.fromhex(parts[0]) 
-    ciphertext = bytes.fromhex(parts[1]) 
-    tag = bytes.fromhex(parts[2]) 
+    nonce = bytes.fromhex(parts[0])
+    ciphertext = bytes.fromhex(parts[1])
+    tag = bytes.fromhex(parts[2])
 
-    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce) # Create a new AES cipher in GCM mode with the nonce already saved
+    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     try:
         plaintext = cipher.decrypt_and_verify(ciphertext, tag)
         return plaintext.decode()
     except ValueError:
         print("[!] Wrong master password. Could not decrypt vault.")
-        return None   
+        return None
 
 
 def load_vault(username, master_password):
-    vault_path = os.path.join("data", username, "vault.json") #build path
-    
-    if not os.path.exists(vault_path):  #if vault doesn't exist return empty array
-        return []
-    
-    with open(vault_path, "r") as f:
-        vault_file = json.load(f) #reads the whole vault.json into a Python dictionary
-    
-    encrypted_vault = vault_file["encrypted_vault"] # get encrypted string from vault file
+    path = _vault_path(username)
 
-    # Extract r and s from the signature
+    if not os.path.exists(path):
+        return None
+
+    with open(path, "r") as f:
+        vault_file = json.load(f)
+
+    encrypted_vault = vault_file["encrypted_vault"]
+
     sig_parts = vault_file["signature"].split(":")
     r = sig_parts[0]
     s = sig_parts[1]
-    
-    # Verify the vault's integrity using the signature before decryption
+
     if not verify_vault(username, encrypted_vault, r, s):
         print("[!!!] ALERT: Vault has been tampered with. Aborting.")
         return None
-    
-    key = get_aes_key(master_password)
-    credentials = decrypt_data(key, encrypted_vault)
 
-    if credentials is None:
-        return None      
-    
-    return json.loads(credentials) # Convert the decrypted JSON string back to a Python list 
+    key = get_aes_key(master_password)
+    credentials_plain = decrypt_data(key, encrypted_vault)
+
+    if credentials_plain is None:
+        return None
+
+    return json.loads(credentials_plain)
 
 
 def save_vault(username, master_password, vault_data):
-    vault_path = os.path.join("data", username, "vault.json")
-    os.makedirs(os.path.join("data", username), exist_ok=True) # Create the user directory if it doesn't exist
+    vault_path = _vault_path(username)
+    os.makedirs(os.path.join("data", username), exist_ok=True)
+
     key = get_aes_key(master_password)
-    plaintext = json.dumps(vault_data) # converts your Python list back into a JSON string 
+    plaintext = json.dumps(vault_data)
     encrypted_vault = encrypt_data(key, plaintext)
-    
+
     signature = sign_vault(username, encrypted_vault)
-    
-    # create a dictionary to store the encrypted vault and its signature, then save it to the vault.json file
+
     vault_file = {
         "encrypted_vault": encrypted_vault,
-        "signature": signature["r"] + ":" + signature["s"]
+        "signature": signature["r"] + ":" + signature["s"],
     }
-    
+
     with open(vault_path, "w") as f:
         json.dump(vault_file, f, indent=4)
-    
+
     print("[+] Vault saved successfully.")
 
 
 def add_credential(username, master_password, website, user, password):
+    if not vault_is_initialized(username):
+        print("[!] Vault not initialized. Use 'Initialize vault / set master password' first.")
+        return
+
     credentials = load_vault(username, master_password)
-    
+
     if credentials is None:
         print("[!!!] Cannot add. Aborting.")
         return
-    
-    normalized_website = _normalize_website(website)
+
+    normalized_website = normalize_website(website)
 
     for entry in credentials:
-        if _normalize_website(entry["website"]) == normalized_website and entry["username"] == user: # user can't be on the same website twice
+        if normalize_website(entry["website"]) == normalized_website and entry["username"] == user:
             print("[!] This username on this website already exists.")
             return
-    
+
     for entry in credentials:
-        if entry["password"] == password: #give warning if password is already used for another account, but still allow it to be added
+        if entry["password"] == password:
             print(f"[!] Warning: this password is already used on {entry['website']}.")
-    
+
     credentials.append({
         "website": website,
         "username": user,
         "password": password
     })
-    
+
     save_vault(username, master_password, credentials)
     print(f"[+] Credential for {website} added.")
 
 
 def retrieve_credential(username, master_password, website):
+    if not vault_is_initialized(username):
+        print("[!] Vault not initialized. Use 'Initialize vault / set master password' first.")
+        return
+
     credentials = load_vault(username, master_password)
 
     if credentials is None:
         print("[!!!] Cannot retrieve. Aborting.")
         return
 
-    normalized_website = _normalize_website(website)
+    normalized_website = normalize_website(website)
 
-    #search for selected entery and print it if found, otherwise print not found message
     for entry in credentials:
-        if _normalize_website(entry["website"]) == normalized_website:
+        if normalize_website(entry["website"]) == normalized_website:
             print(f"\n  Website:  {entry['website']}")
             print(f"  Username: {entry['username']}")
             print(f"  Password: {entry['password']}")
@@ -146,21 +166,24 @@ def retrieve_credential(username, master_password, website):
 
 
 def update_credential(username, master_password, website, new_user, new_password):
+    if not vault_is_initialized(username):
+        print("[!] Vault not initialized. Use 'Initialize vault / set master password' first.")
+        return
+
     credentials = load_vault(username, master_password)
 
     if credentials is None:
         print("[!!!] Cannot update. Aborting.")
         return
 
-    normalized_website = _normalize_website(website)
+    normalized_website = normalize_website(website)
 
     for entry in credentials:
-        if _normalize_website(entry["website"]) == normalized_website:
+        if normalize_website(entry["website"]) == normalized_website:
 
             if new_password != "" and new_password == entry["password"]:
                 print("[!] Warning: new password is the same as the current one.")
 
-            #if the user leaves either field blank, it won't be updated, save old value instead
             if new_user != "":
                 entry["username"] = new_user
             if new_password != "":
@@ -174,17 +197,20 @@ def update_credential(username, master_password, website, new_user, new_password
 
 
 def delete_credential(username, master_password, website):
+    if not vault_is_initialized(username):
+        print("[!] Vault not initialized. Use 'Initialize vault / set master password' first.")
+        return
+
     credentials = load_vault(username, master_password)
 
     if credentials is None:
         print("[!!!] Cannot delete. Aborting.")
         return
 
-    normalized_website = _normalize_website(website)
+    normalized_website = normalize_website(website)
 
-    #search for the selected entry and delete it if found
     for i, entry in enumerate(credentials):
-        if _normalize_website(entry["website"]) == normalized_website:
+        if normalize_website(entry["website"]) == normalized_website:
             credentials.pop(i)
             save_vault(username, master_password, credentials)
             print(f"[+] Credential for {website} deleted.")
@@ -194,6 +220,10 @@ def delete_credential(username, master_password, website):
 
 
 def list_credentials(username, master_password):
+    if not vault_is_initialized(username):
+        print("[!] Vault not initialized. Use 'Initialize vault / set master password' first.")
+        return
+
     credentials = load_vault(username, master_password)
 
     if credentials is None:
@@ -208,6 +238,3 @@ def list_credentials(username, master_password):
     print("  " + "-" * 65)
     for entry in credentials:
         print(f"  {entry['website']:<25} {entry['username']:<25} {entry['password']}")
-
-
-

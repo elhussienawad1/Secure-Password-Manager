@@ -7,7 +7,7 @@ from Crypto.Random import get_random_bytes
 
 from src.utltis import generate_large_prime
 from src.sign_verify import sign_vault, verify_vault
-from src.vault import get_aes_key, encrypt_data, decrypt_data
+from src.vault import decrypt_data, encrypt_data, load_vault, normalize_website, save_vault, vault_is_initialized
 from src.keygen import load_parameters 
 
 def generate_dh_parameters(bits: int = 512) -> dict:
@@ -79,25 +79,17 @@ def export_vault(username: str, master_password: str, recipient: str):
 
     print("[+] Both DH public key signatures verified successfully.")
 
-    # --- Load Device 1's vault ---
-    vault_path = os.path.join("data", username, "vault.json")
-    if not os.path.exists(vault_path):
+    # --- Load Device 1's vault (encrypted + verified master password) ---
+    if not vault_is_initialized(username):
         print("[!] Vault not found.")
         return (False, "Vault not found.")
 
-    with open(vault_path, "r") as f:
-        vault_file = json.load(f)
+    credentials = load_vault(username, master_password)
+    if credentials is None:
+        print("[!] Invalid master password or vault unreadable.")
+        return (False, "Invalid master password or vault unreadable.")
 
-    # --- Decrypt vault with master password ---
-    aes_key = get_aes_key(master_password)
-    try:
-        plaintext_entries = decrypt_data(aes_key, vault_file["encrypted_vault"])
-    except Exception:
-        print("[!] Failed to decrypt vault. Wrong master password?")
-        return (False, "Failed to decrypt vault. Wrong master password?")
-
-    # --- Check if vault is empty ---
-    credentials = json.loads(plaintext_entries)
+    plaintext_entries = json.dumps(credentials)
     if len(credentials) == 0:
         print("[!] Cannot export empty vault. Add credentials first.")
         return (False, "Cannot export empty vault. Add credentials first.")
@@ -150,8 +142,8 @@ def import_vault(username: str, master_password: str, sender: str):
         package = json.load(f)
 
     # --- Load DH parameters ---
-    q,alpha = load_parameters()
-    
+    q, alpha = load_parameters()
+
     # --- Load d2_priv from temp session file ---
     session_path = os.path.join("data", "Export", f"{sender}_to_{username}_session.json")
     if not os.path.exists(session_path):
@@ -162,9 +154,9 @@ def import_vault(username: str, master_password: str, sender: str):
         d2_priv = json.load(f)["d2_priv"]
 
     # --- Recompute shared secret and session key ---
-    d1_pub        = package["d1_dh_public"]
+    d1_pub = package["d1_dh_public"]
     shared_secret = compute_shared_secret(d1_pub, d2_priv, q)
-    session_key   = derive_session_key(shared_secret)
+    session_key = derive_session_key(shared_secret)
 
     # --- Verify Device 1's signature over the session-encrypted data ---
     session_encrypted = package["session_encrypted"]
@@ -177,31 +169,57 @@ def import_vault(username: str, master_password: str, sender: str):
 
     print("[+] Transfer signature verified successfully.")
 
-    # --- Decrypt session-encrypted data ---
-    try:
-        plaintext_entries = decrypt_data(session_key, session_encrypted)
-    except Exception:
+    # --- Decrypt session-encrypted payload (JSON list of credential dicts) ---
+    plaintext_entries = decrypt_data(session_key, session_encrypted)
+    if plaintext_entries is None:
         print("[!!!] Decryption failed. Data may be corrupted.")
         return
 
-    # --- Re-encrypt with Device 2's master password ---
-    aes_key           = get_aes_key(master_password)
-    new_encrypted_vault = encrypt_data(aes_key, plaintext_entries)
+    try:
+        incoming_credentials = json.loads(plaintext_entries)
+    except json.JSONDecodeError:
+        print("[!!!] Imported payload is not valid credential data.")
+        return
 
-    # --- Sign new vault with Device 2's private key ---
-    new_sig = sign_vault(username, new_encrypted_vault)
-    nr, ns  = new_sig["r"], new_sig["s"]
+    if not isinstance(incoming_credentials, list):
+        print("[!!!] Imported payload must be a list of credentials.")
+        return
 
-    # --- Save vault ---
-    os.makedirs(os.path.join("data", username), exist_ok=True)
+    # --- Existing local vault (same format as vault.py: signature + AES-GCM) ---
     vault_path = os.path.join("data", username, "vault.json")
-    with open(vault_path, "w") as f:
-        json.dump({
-            "encrypted_vault": new_encrypted_vault,
-            "signature":       f"{nr}:{ns}",
-        }, f, indent=2)
+    existing_credentials = []
+    if os.path.exists(vault_path):
+        existing_credentials = load_vault(username, master_password)
+        if existing_credentials is None:
+            print("[!] Failed to decrypt or verify existing vault. Wrong master password?")
+            return
+        print(f"[+] Loaded {len(existing_credentials)} existing credential(s).")
 
-    # --- Clean up temp session file ---
+    # Merge on (username, normalized website); imported entry wins on conflict
+    merged = {
+        (entry["username"], normalize_website(entry["website"])): entry
+        for entry in existing_credentials
+    }
+
+    duplicates = 0
+    added = 0
+    for entry in incoming_credentials:
+        key = (entry["username"], normalize_website(entry["website"]))
+        if key in merged:
+            duplicates += 1
+        else:
+            added += 1
+        merged[key] = entry
+
+    merged_list = list(merged.values())
+
+    print(
+        f"[+] Merge complete: {added} new entry/entries added, "
+        f"{duplicates} duplicate(s) overwritten with imported data."
+    )
+
+    save_vault(username, master_password, merged_list)
+
     os.remove(session_path)
 
-    print(f"[+] Vault imported successfully for '{username}'.")    
+    print(f"[+] Vault imported and merged successfully for '{username}'.")

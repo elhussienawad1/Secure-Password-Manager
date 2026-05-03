@@ -11,8 +11,10 @@ from src.sign_verify import verify_vault
 from src.vault import (
     add_credential,
     delete_credential,
+    initialize_vault,
     load_vault,
     update_credential,
+    vault_is_initialized,
 )
 
 
@@ -131,6 +133,7 @@ class SecurePasswordManagerGUI:
 
         buttons = [
             ("Initialize Account", self.show_init_account),
+            ("Initialize Vault / Master Password", self.show_initialize_vault),
             ("Add Credential", self.show_add_credential),
             ("Retrieve Credential", self.show_retrieve_credential),
             ("Update Credential", self.show_update_credential),
@@ -170,7 +173,57 @@ class SecurePasswordManagerGUI:
             messagebox.showerror("Error", f"Failed to initialize account: {str(e)}")
         
         self.show_main_menu()
-    
+
+    def show_initialize_vault(self):
+        self.clear_window()
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        priv_path = os.path.join("data", self.username, "private.json")
+        if not os.path.exists(priv_path):
+            messagebox.showerror(
+                "Account not ready",
+                "Initialize Account (generate signing keys) first, then initialize the vault.",
+            )
+            self.show_main_menu()
+            return
+        ttk.Label(card, text="Initialize Vault", style="CardTitle.TLabel").pack(pady=(4, 8))
+        ttk.Label(
+            card,
+            text="Create your encrypted vault and set the master password once. You will use it for all vault operations.",
+            style="Subtitle.TLabel",
+        ).pack(anchor="w", pady=(0, 14))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        confirm_pwd = self._form_entry(form_frame, "Confirm Master Password", show="*")
+
+        result_text = self._result_box(card, "Result", height=6)
+
+        def submit():
+            if not self._require_fields(
+                [("Master Password", master_pwd.get()), ("Confirmation", confirm_pwd.get())]
+            ):
+                return
+            if master_pwd.get() != confirm_pwd.get():
+                self._set_result(result_text, "Passwords do not match.")
+                return
+            if vault_is_initialized(self.username):
+                self._set_result(result_text, "Vault already exists for this user.")
+                return
+            try:
+                _, output = self._run_action(initialize_vault, self.username, master_pwd.get())
+                self._set_result(result_text, output or "Done.")
+                master_pwd.delete(0, tk.END)
+                confirm_pwd.delete(0, tk.END)
+            except Exception as e:
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
+        button_frame.pack(pady=20)
+        ttk.Button(button_frame, text="Create Vault", command=submit, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def _form_entry(self, parent, label, show=None):
         ttk.Label(parent, text=label, style="Label.TLabel").pack(anchor="w", pady=(6, 2))
         row = ttk.Frame(parent, style="Card.TFrame")
@@ -271,9 +324,15 @@ class SecurePasswordManagerGUI:
                 return
 
             try:
+                if not vault_is_initialized(self.username):
+                    self._set_result(
+                        result_text,
+                        "Vault not initialized. Use 'Initialize Vault / Master Password' first.",
+                    )
+                    return
                 credentials = load_vault(self.username, master_pwd.get())
                 if credentials is None:
-                    self._set_result(result_text, "Unable to decrypt or verify vault.")
+                    self._set_result(result_text, "Invalid master password or vault could not be read.")
                     return
 
                 selected = None
@@ -414,9 +473,15 @@ class SecurePasswordManagerGUI:
                 return
 
             try:
+                if not vault_is_initialized(self.username):
+                    self._set_result(
+                        result_text,
+                        "Vault not initialized. Use 'Initialize Vault / Master Password' first.",
+                    )
+                    return
                 credentials = load_vault(self.username, master_pwd.get())
                 if credentials is None:
-                    self._set_result(result_text, "Unable to decrypt or verify vault.")
+                    self._set_result(result_text, "Invalid master password or vault could not be read.")
                     return
                 if not credentials:
                     self._set_result(result_text, "Vault is empty.")
@@ -447,7 +512,10 @@ class SecurePasswordManagerGUI:
 
         vault_path = os.path.join("data", self.username, "vault.json")
         if not os.path.exists(vault_path):
-            messagebox.showwarning("Warning", "No vault found. Add a credential first.")
+            messagebox.showwarning(
+                "Warning",
+                "No vault found. Use 'Initialize Vault / Master Password' first, then add credentials.",
+            )
             self.show_main_menu()
             return
         
@@ -493,7 +561,7 @@ class SecurePasswordManagerGUI:
                     return
 
                 recipient_user = recipient.get().strip()
-                if not os.path.exists(f"{recipient_user}_public.json"):
+                if not os.path.exists(f"data/Export/{recipient_user}_public.json"):
                     self._set_result(result_text, f"Public key for '{recipient_user}' not found.")
                     return
 
