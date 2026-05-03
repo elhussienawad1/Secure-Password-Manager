@@ -1,46 +1,113 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
-import os
+import io
 import json
-from src.keygen import generate_elgamal_keypair
-from src.sign_verify import sign_vault, verify_vault
-from src.vault import (
-    add_credential, retrieve_credential, update_credential,
-    delete_credential, list_credentials
-)
+import os
+import tkinter as tk
+from contextlib import redirect_stdout
+from tkinter import messagebox, ttk
+
 from src.key_exchange import export_vault, import_vault
+from src.keygen import generate_elgamal_keypair
+from src.sign_verify import verify_vault
+from src.vault import (
+    add_credential,
+    delete_credential,
+    load_vault,
+    update_credential,
+)
 
 
 class SecurePasswordManagerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Secure Password Manager")
-        self.root.geometry("700x600")
-        self.root.configure(bg="#f0f0f0")
-        
+        self.root.geometry("860x650")
+        self.root.minsize(780, 560)
+
         self.username = None
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        
+        self.style = ttk.Style(self.root)
+        self.style.theme_use("clam")
+        self._configure_styles()
+
         self.show_login_screen()
-    
+
+    def _configure_styles(self):
+        self.root.configure(bg="#10172a")
+        self.style.configure("Root.TFrame", background="#10172a")
+        self.style.configure("Card.TFrame", background="#f8fafc")
+        self.style.configure("Title.TLabel", font=("Segoe UI", 24, "bold"), background="#f8fafc", foreground="#0f172a")
+        self.style.configure("Subtitle.TLabel", font=("Segoe UI", 11), background="#f8fafc", foreground="#334155")
+        self.style.configure("CardTitle.TLabel", font=("Segoe UI", 17, "bold"), background="#f8fafc", foreground="#0f172a")
+        self.style.configure("Label.TLabel", font=("Segoe UI", 10), background="#f8fafc", foreground="#1e293b")
+        self.style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), padding=8)
+        self.style.configure("Secondary.TButton", font=("Segoe UI", 10), padding=8)
+
     def clear_window(self):
         for widget in self.root.winfo_children():
             widget.destroy()
-    
+
+    def _root_frame(self):
+        root_frame = ttk.Frame(self.root, style="Root.TFrame", padding=18)
+        root_frame.pack(fill="both", expand=True)
+        return root_frame
+
+    def _card(self, parent):
+        card = ttk.Frame(parent, style="Card.TFrame", padding=18)
+        card.pack(fill="both", expand=True)
+        return card
+
+    def _result_box(self, parent, title="Result", height=8):
+        result_frame = ttk.LabelFrame(parent, text=title, padding=10)
+        result_frame.pack(fill="both", expand=True, padx=6, pady=8)
+        text = tk.Text(
+            result_frame,
+            height=height,
+            wrap="word",
+            bg="#f8fafc",
+            fg="#0f172a",
+            relief="flat",
+            font=("Consolas", 10),
+        )
+        text.pack(fill="both", expand=True)
+        text.config(state="disabled")
+        return text
+
+    def _set_result(self, box, text):
+        box.config(state="normal")
+        box.delete("1.0", tk.END)
+        box.insert(tk.END, text.strip() if text else "")
+        box.config(state="disabled")
+
+    def _run_action(self, action, *args):
+        capture = io.StringIO()
+        with redirect_stdout(capture):
+            result = action(*args)
+        output = capture.getvalue().strip()
+        return result, output
+
+    def _require_fields(self, fields):
+        for field_name, value in fields:
+            if not value.strip():
+                messagebox.showerror("Missing Input", f"{field_name} is required.")
+                return False
+        return True
+
     def show_login_screen(self):
         self.clear_window()
-        
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(expand=True)
-        
-        title = ttk.Label(frame, text="Secure Password Manager", font=("Arial", 24, "bold"))
-        title.pack(pady=20)
-        
-        ttk.Label(frame, text="Username:").pack(pady=5)
-        username_entry = ttk.Entry(frame, width=30)
-        username_entry.pack(pady=5)
-        
+
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Secure Password Manager", style="Title.TLabel").pack(pady=(20, 8))
+        ttk.Label(
+            card,
+            text="Manage credentials with encrypted vault storage.",
+            style="Subtitle.TLabel",
+        ).pack(pady=(0, 22))
+
+        ttk.Label(card, text="Username", style="Label.TLabel").pack(anchor="w")
+        username_entry = ttk.Entry(card, width=40)
+        username_entry.pack(anchor="w", pady=(4, 14))
+        username_entry.focus_set()
+
         def login():
             user = username_entry.get().strip()
             if not user:
@@ -48,21 +115,20 @@ class SecurePasswordManagerGUI:
                 return
             self.username = user
             self.show_main_menu()
-        
-        ttk.Button(frame, text="Login", command=login).pack(pady=20)
-    
+
+        ttk.Button(card, text="Login", command=login, style="Primary.TButton").pack(anchor="w", pady=4)
+
     def show_main_menu(self):
         self.clear_window()
-        
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        title = ttk.Label(frame, text=f"Welcome, {self.username}!", font=("Arial", 18, "bold"))
-        title.pack(pady=20)
-        
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(fill="both", expand=True, pady=10)
-        
+
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text=f"Welcome, {self.username}", style="Title.TLabel").pack(pady=(4, 4))
+        ttk.Label(card, text="Choose an action", style="Subtitle.TLabel").pack(pady=(0, 14))
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
+        button_frame.pack(fill="both", expand=True)
+
         buttons = [
             ("Initialize Account", self.show_init_account),
             ("Add Credential", self.show_add_credential),
@@ -75,18 +141,17 @@ class SecurePasswordManagerGUI:
             ("Import Vault", self.show_import_vault),
             ("Logout", self.show_login_screen),
         ]
-        
+
         for text, command in buttons:
-            btn = ttk.Button(button_frame, text=text, command=command, width=30)
-            btn.pack(pady=8)
-    
+            btn = ttk.Button(button_frame, text=text, command=command, style="Secondary.TButton", width=32)
+            btn.pack(pady=6)
+
     def show_init_account(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(expand=True)
-        
-        ttk.Label(frame, text="Initialize Account", font=("Arial", 16, "bold")).pack(pady=20)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Initialize Account", style="CardTitle.TLabel").pack(pady=12)
+
         if not os.path.exists("key.json"):
             messagebox.showerror("Error", "key.json not found!")
             self.show_main_menu()
@@ -106,288 +171,280 @@ class SecurePasswordManagerGUI:
         
         self.show_main_menu()
     
+    def _form_entry(self, parent, label, show=None):
+        ttk.Label(parent, text=label, style="Label.TLabel").pack(anchor="w", pady=(6, 2))
+        row = ttk.Frame(parent, style="Card.TFrame")
+        row.pack(anchor="w", fill="x")
+        entry = ttk.Entry(row, width=48, show=show)
+        entry.pack(side="left")
+        if show == "*":
+            toggle_btn = ttk.Button(
+                row,
+                text="Show",
+                style="Secondary.TButton",
+                command=lambda e=entry, b=None: self._toggle_password(e, toggle_btn),
+                width=8,
+            )
+            toggle_btn.pack(side="left", padx=(8, 0))
+        return entry
+
+    def _toggle_password(self, entry, button):
+        is_hidden = entry.cget("show") == "*"
+        entry.config(show="" if is_hidden else "*")
+        button.config(text="Hide" if is_hidden else "Show")
+
+    def _normalize_website(self, website):
+        return website.strip().lower()
+
     def show_add_credential(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Add Credential", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Website:").pack(anchor="w", pady=5)
-        website = ttk.Entry(form_frame, width=40)
-        website.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Username:").pack(anchor="w", pady=5)
-        username = ttk.Entry(form_frame, width=40)
-        username.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Password:").pack(anchor="w", pady=5)
-        password = ttk.Entry(form_frame, show="*", width=40)
-        password.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Result", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        result_text = tk.Text(result_frame, height=6, width=50)
-        result_text.pack(fill="both", expand=True)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Add Credential", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        website = self._form_entry(form_frame, "Website")
+        username = self._form_entry(form_frame, "Username")
+        password = self._form_entry(form_frame, "Password", show="*")
+
+        result_text = self._result_box(card, "Result", height=7)
+
         def save():
+            if not self._require_fields(
+                [
+                    ("Master Password", master_pwd.get()),
+                    ("Website", website.get()),
+                    ("Username", username.get()),
+                    ("Password", password.get()),
+                ]
+            ):
+                return
+
             try:
-                success, message = add_credential(
+                _, output = self._run_action(
+                    add_credential,
                     self.username,
                     master_pwd.get(),
                     website.get(),
                     username.get(),
-                    password.get()
+                    password.get(),
                 )
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                if success:
-                    result_text.insert(tk.END, f"Success: {message}")
+                if output:
+                    self._set_result(result_text, output)
+                else:
+                    self._set_result(result_text, "Credential operation completed.")
+                if "[+] Credential for" in output:
                     master_pwd.delete(0, tk.END)
                     website.delete(0, tk.END)
                     username.delete(0, tk.END)
                     password.delete(0, tk.END)
-                else:
-                    result_text.insert(tk.END, f"Error: {message}")
-                result_text.config(state="disabled")
             except Exception as e:
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                result_text.insert(tk.END, f"Error: {str(e)}")
-                result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Save", command=save).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Save", command=save, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_retrieve_credential(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Retrieve Credential", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Website:").pack(anchor="w", pady=5)
-        website = ttk.Entry(form_frame, width=40)
-        website.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Result", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        result_text = tk.Text(result_frame, height=8, width=50)
-        result_text.pack(fill="both", expand=True)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Retrieve Credential", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        website = self._form_entry(form_frame, "Website")
+
+        result_text = self._result_box(card, "Result", height=9)
+
         def retrieve():
+            if not self._require_fields(
+                [
+                    ("Master Password", master_pwd.get()),
+                    ("Website", website.get()),
+                ]
+            ):
+                return
+
             try:
-                success, message, credential = retrieve_credential(self.username, master_pwd.get(), website.get())
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                
-                if success:
-                    result = f"Website:  {credential['website']}\n"
-                    result += f"Username: {credential['username']}\n"
-                    result += f"Password: {credential['password']}"
-                    result_text.insert(tk.END, result)
-                else:
-                    result_text.insert(tk.END, f"Error: {message}")
-                result_text.config(state="disabled")
+                credentials = load_vault(self.username, master_pwd.get())
+                if credentials is None:
+                    self._set_result(result_text, "Unable to decrypt or verify vault.")
+                    return
+
+                selected = None
+                normalized_input = self._normalize_website(website.get())
+                for entry in credentials:
+                    if self._normalize_website(entry["website"]) == normalized_input:
+                        selected = entry
+                        break
+
+                if selected is None:
+                    self._set_result(result_text, f"No credential found for {website.get().strip()}.")
+                    return
+
+                result = (
+                    f"Website:  {selected['website']}\n"
+                    f"Username: {selected['username']}\n"
+                    f"Password: {selected['password']}"
+                )
+                self._set_result(result_text, result)
             except Exception as e:
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                result_text.insert(tk.END, f"Error: {str(e)}")
-                result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Retrieve", command=retrieve).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Retrieve", command=retrieve, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(
+            button_frame,
+            text="Copy Password",
+            command=lambda: self.root.clipboard_append(
+                result_text.get("1.0", tk.END).split("Password: ", 1)[-1].strip()
+            )
+            if "Password:" in result_text.get("1.0", tk.END)
+            else None,
+            style="Secondary.TButton",
+        ).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_update_credential(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Update Credential", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Website:").pack(anchor="w", pady=5)
-        website = ttk.Entry(form_frame, width=40)
-        website.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="New Username (leave blank to keep):").pack(anchor="w", pady=5)
-        new_user = ttk.Entry(form_frame, width=40)
-        new_user.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="New Password (leave blank to keep):").pack(anchor="w", pady=5)
-        new_pwd = ttk.Entry(form_frame, show="*", width=40)
-        new_pwd.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Result", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        result_text = tk.Text(result_frame, height=6, width=50)
-        result_text.pack(fill="both", expand=True)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Update Credential", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        website = self._form_entry(form_frame, "Website")
+        new_user = self._form_entry(form_frame, "New Username (optional)")
+        new_pwd = self._form_entry(form_frame, "New Password (optional)", show="*")
+
+        result_text = self._result_box(card, "Result", height=7)
+
         def update():
+            if not self._require_fields(
+                [
+                    ("Master Password", master_pwd.get()),
+                    ("Website", website.get()),
+                ]
+            ):
+                return
+            if not new_user.get().strip() and not new_pwd.get().strip():
+                self._set_result(result_text, "Enter at least one field to update.")
+                return
+
             try:
-                success, message = update_credential(
+                _, output = self._run_action(
+                    update_credential,
                     self.username,
                     master_pwd.get(),
                     website.get(),
                     new_user.get(),
-                    new_pwd.get()
+                    new_pwd.get(),
                 )
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                if success:
-                    result_text.insert(tk.END, f"Success: {message}")
+                if output:
+                    self._set_result(result_text, output)
                 else:
-                    result_text.insert(tk.END, f"Error: {message}")
-                result_text.config(state="disabled")
+                    self._set_result(result_text, "Credential operation completed.")
             except Exception as e:
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                result_text.insert(tk.END, f"Error: {str(e)}")
-                result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Update", command=update).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Update", command=update, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_delete_credential(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Delete Credential", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Website:").pack(anchor="w", pady=5)
-        website = ttk.Entry(form_frame, width=40)
-        website.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Result", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        result_text = tk.Text(result_frame, height=6, width=50)
-        result_text.pack(fill="both", expand=True)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Delete Credential", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        website = self._form_entry(form_frame, "Website")
+
+        result_text = self._result_box(card, "Result", height=7)
+
         def delete():
             if messagebox.askyesno("Confirm", "Are you sure you want to delete this credential?"):
+                if not self._require_fields(
+                    [
+                        ("Master Password", master_pwd.get()),
+                        ("Website", website.get()),
+                    ]
+                ):
+                    return
                 try:
-                    success, message = delete_credential(self.username, master_pwd.get(), website.get())
-                    result_text.config(state="normal")
-                    result_text.delete(1.0, tk.END)
-                    if success:
-                        result_text.insert(tk.END, f"Success: {message}")
+                    _, output = self._run_action(
+                        delete_credential, self.username, master_pwd.get(), website.get()
+                    )
+                    if output:
+                        self._set_result(result_text, output)
                     else:
-                        result_text.insert(tk.END, f"Error: {message}")
-                    result_text.config(state="disabled")
+                        self._set_result(result_text, "Credential operation completed.")
                 except Exception as e:
-                    result_text.config(state="normal")
-                    result_text.delete(1.0, tk.END)
-                    result_text.insert(tk.END, f"Error: {str(e)}")
-                    result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                    self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Delete", command=delete).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Delete", command=delete, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_list_credentials(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="List Credentials", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Credentials", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Create a text widget with scrollbar to display credentials
-        text_frame = ttk.Frame(result_frame)
-        text_frame.pack(fill="both", expand=True)
-        
-        scrollbar = ttk.Scrollbar(text_frame)
-        scrollbar.pack(side="right", fill="y")
-        
-        result_text = tk.Text(text_frame, height=12, width=60, yscrollcommand=scrollbar.set)
-        result_text.pack(fill="both", expand=True)
-        scrollbar.config(command=result_text.yview)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="List Credentials", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+
+        result_text = self._result_box(card, "Credentials", height=14)
+
         def list_creds():
+            if not self._require_fields([("Master Password", master_pwd.get())]):
+                return
+
             try:
-                success, message, credentials = list_credentials(self.username, master_pwd.get())
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                
-                if not success:
-                    result_text.insert(tk.END, f"Error: {message}")
-                elif len(credentials) == 0:
-                    result_text.insert(tk.END, "Vault is empty.")
-                else:
-                    header = f"{'Website':<25} {'Username':<25} {'Password'}\n"
-                    header += "-" * 65 + "\n"
-                    result_text.insert(tk.END, header)
-                    for entry in credentials:
-                        line = f"{entry['website']:<25} {entry['username']:<25} {entry['password']}\n"
-                        result_text.insert(tk.END, line)
-                
-                result_text.config(state="disabled")
+                credentials = load_vault(self.username, master_pwd.get())
+                if credentials is None:
+                    self._set_result(result_text, "Unable to decrypt or verify vault.")
+                    return
+                if not credentials:
+                    self._set_result(result_text, "Vault is empty.")
+                    return
+
+                lines = [
+                    f"{'Website':<25} {'Username':<25} {'Password'}",
+                    "-" * 72,
+                ]
+                for entry in credentials:
+                    lines.append(
+                        f"{entry['website']:<25} {entry['username']:<25} {entry['password']}"
+                    )
+                self._set_result(result_text, "\n".join(lines))
             except Exception as e:
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                result_text.insert(tk.END, f"Error: {str(e)}")
-                result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Load", command=list_creds).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Load", command=list_creds, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_verify_vault(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(expand=True)
-        
-        ttk.Label(frame, text="Verify Vault Integrity", font=("Arial", 16, "bold")).pack(pady=20)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Verify Vault Integrity", style="CardTitle.TLabel").pack(pady=20)
+
         vault_path = os.path.join("data", self.username, "vault.json")
         if not os.path.exists(vault_path):
             messagebox.showwarning("Warning", "No vault found. Add a credential first.")
@@ -412,89 +469,84 @@ class SecurePasswordManagerGUI:
             messagebox.showerror("Error", f"Failed to verify vault: {str(e)}")
         
         self.show_main_menu()
-    
+
     def show_export_vault(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Export Vault", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Master Password:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="Recipient Username:").pack(anchor="w", pady=5)
-        recipient = ttk.Entry(form_frame, width=40)
-        recipient.pack(anchor="w", pady=5)
-        
-        result_frame = ttk.LabelFrame(frame, text="Result", padding="10")
-        result_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        result_text = tk.Text(result_frame, height=8, width=50)
-        result_text.pack(fill="both", expand=True)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Export Vault", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        master_pwd = self._form_entry(form_frame, "Master Password", show="*")
+        recipient = self._form_entry(form_frame, "Recipient Username")
+        result_text = self._result_box(card, "Result", height=8)
+
         def export():
             try:
-                if not os.path.exists(f"data/Export/{recipient.get()}_public.json"):
-                    result_text.config(state="normal")
-                    result_text.delete(1.0, tk.END)
-                    result_text.insert(tk.END, f"Error: Public key for '{recipient.get()}' not found.")
-                    result_text.config(state="disabled")
+                if not self._require_fields(
+                    [
+                        ("Master Password", master_pwd.get()),
+                        ("Recipient Username", recipient.get()),
+                    ]
+                ):
                     return
-                
-                success, message = export_vault(self.username, master_pwd.get(), recipient.get())
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
+
+                recipient_user = recipient.get().strip()
+                if not os.path.exists(f"{recipient_user}_public.json"):
+                    self._set_result(result_text, f"Public key for '{recipient_user}' not found.")
+                    return
+
+                result, output = self._run_action(export_vault, self.username, master_pwd.get(), recipient_user)
+                success, message = result if isinstance(result, tuple) and len(result) == 2 else (False, "Export failed.")
                 if success:
-                    result_text.insert(tk.END, f"Success: {message}")
+                    self._set_result(result_text, message if not output else f"{message}\n\n{output}")
                 else:
-                    result_text.insert(tk.END, f"Error: {message}")
-                result_text.config(state="disabled")
+                    self._set_result(result_text, message if not output else f"{message}\n\n{output}")
             except Exception as e:
-                result_text.config(state="normal")
-                result_text.delete(1.0, tk.END)
-                result_text.insert(tk.END, f"Error: {str(e)}")
-                result_text.config(state="disabled")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Export", command=export).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
-    
+        ttk.Button(button_frame, text="Export", command=export, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
+
     def show_import_vault(self):
         self.clear_window()
-        frame = ttk.Frame(self.root, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        ttk.Label(frame, text="Import Vault", font=("Arial", 16, "bold")).pack(pady=20)
-        
-        form_frame = ttk.Frame(frame)
-        form_frame.pack(fill="both", padx=10, pady=10)
-        
-        ttk.Label(form_frame, text="Sender Username:").pack(anchor="w", pady=5)
-        sender = ttk.Entry(form_frame, width=40)
-        sender.pack(anchor="w", pady=5)
-        
-        ttk.Label(form_frame, text="New Master Password for Imported Vault:").pack(anchor="w", pady=5)
-        master_pwd = ttk.Entry(form_frame, show="*", width=40)
-        master_pwd.pack(anchor="w", pady=5)
-        
+        root_frame = self._root_frame()
+        card = self._card(root_frame)
+        ttk.Label(card, text="Import Vault", style="CardTitle.TLabel").pack(pady=(4, 12))
+
+        form_frame = ttk.Frame(card, style="Card.TFrame")
+        form_frame.pack(fill="x", padx=6)
+        sender = self._form_entry(form_frame, "Sender Username")
+        master_pwd = self._form_entry(form_frame, "New Master Password", show="*")
+        result_text = self._result_box(card, "Result", height=8)
+
         def import_v():
             try:
-                import_vault(self.username, master_pwd.get(), sender.get())
-                messagebox.showinfo("Success", "Vault imported successfully!")
-                self.show_main_menu()
+                if not self._require_fields(
+                    [
+                        ("Sender Username", sender.get()),
+                        ("New Master Password", master_pwd.get()),
+                    ]
+                ):
+                    return
+
+                _, output = self._run_action(import_vault, self.username, master_pwd.get(), sender.get().strip())
+                if "imported successfully" in output.lower():
+                    self._set_result(result_text, output)
+                elif output:
+                    self._set_result(result_text, output)
+                else:
+                    self._set_result(result_text, "Import finished. Check vault status.")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to import vault: {str(e)}")
-        
-        button_frame = ttk.Frame(frame)
+                self._set_result(result_text, f"Error: {str(e)}")
+
+        button_frame = ttk.Frame(card, style="Card.TFrame")
         button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Import", command=import_v).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Back", command=self.show_main_menu).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Import", command=import_v, style="Primary.TButton").pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_main_menu, style="Secondary.TButton").pack(side="left", padx=5)
 
 
 def main():

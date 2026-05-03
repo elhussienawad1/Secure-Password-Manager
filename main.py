@@ -120,7 +120,7 @@ def main():
         #         continue
             master_password = input("Master password: ").strip()
             recipient       = input("Recipient username: ").strip()
-            if not os.path.exists(f"data/Export/{recipient}_public.json"):
+            if not os.path.exists(f"{recipient}_public.json"):
                 print(f"[!] Public key for '{recipient}' not found.")
                 continue
             export_vault(username, master_password, recipient)
