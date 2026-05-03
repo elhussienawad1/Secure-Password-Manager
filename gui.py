@@ -589,6 +589,7 @@ class SecurePasswordManagerGUI:
         form_frame.pack(fill="x", padx=6)
         sender = self._form_entry(form_frame, "Sender Username")
         master_pwd = self._form_entry(form_frame, "New Master Password", show="*")
+        existing_pwd = self._form_entry(form_frame, "Existing Master Password", show="*")
         result_text = self._result_box(card, "Result", height=8)
 
         def import_v():
@@ -597,11 +598,12 @@ class SecurePasswordManagerGUI:
                     [
                         ("Sender Username", sender.get()),
                         ("New Master Password", master_pwd.get()),
+                        ("Existing Master Password", existing_pwd.get()),
                     ]
                 ):
                     return
 
-                _, output = self._run_action(import_vault, self.username, master_pwd.get(), sender.get().strip())
+                _, output = self._run_action(import_vault, self.username, existing_pwd.get().strip(), master_pwd.get(), sender.get().strip())
                 if "imported successfully" in output.lower():
                     self._set_result(result_text, output)
                 elif output:
