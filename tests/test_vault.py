@@ -136,6 +136,12 @@ class TestRetrieveCredential:
         out = capsys.readouterr().out
         assert "userB" in out or "passB" in out
 
+    def test_retrieve_website_is_case_insensitive(self, capsys):
+        _add("Facebook.com", "userFB", "passFB")
+        retrieve_credential(TEST_USER, MASTER_PW, "facebook.com")
+        out = capsys.readouterr().out
+        assert "userFB" in out or "passFB" in out
+
 
 # ---------------------------------------------------------------------------
 # 3. Update credential
@@ -165,6 +171,13 @@ class TestUpdateCredential:
     def test_update_nonexistent_website_does_not_crash(self):
         _add()
         update_credential(TEST_USER, MASTER_PW, "ghost.com", new_user="x", new_password="y")
+
+    def test_update_website_is_case_insensitive(self, capsys):
+        _add("GitHub.com", "alice", "old_pass")
+        update_credential(TEST_USER, MASTER_PW, "github.com", new_user="bob", new_password="")
+        retrieve_credential(TEST_USER, MASTER_PW, "GITHUB.COM")
+        out = capsys.readouterr().out
+        assert "bob" in out
 
     def test_update_with_wrong_password_fails(self, capsys):
         _add("update.com", "alice", "old_pass")
@@ -201,6 +214,13 @@ class TestDeleteCredential:
     def test_delete_nonexistent_website_does_not_crash(self):
         _add()
         delete_credential(TEST_USER, MASTER_PW, "ghost.com")
+
+    def test_delete_website_is_case_insensitive(self, capsys):
+        _add("LinkedIn.com", "userL", "passL")
+        delete_credential(TEST_USER, MASTER_PW, "linkedin.com")
+        retrieve_credential(TEST_USER, MASTER_PW, "LINKEDIN.COM")
+        out = capsys.readouterr().out
+        assert "No credential found" in out
 
     def test_delete_one_of_multiple_preserves_others(self, capsys):
         _add("keep.com", "userK", "passK")

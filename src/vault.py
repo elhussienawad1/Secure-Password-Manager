@@ -4,6 +4,10 @@ from Crypto.Cipher import AES
 import hashlib
 from src.sign_verify import sign_vault, verify_vault
 
+
+def _normalize_website(website):
+    return website.strip().lower()
+
 # Get AES key from master password
 # same output for same input 
 def get_aes_key(master_password):
@@ -100,8 +104,10 @@ def add_credential(username, master_password, website, user, password):
         print("[!!!] Cannot add. Aborting.")
         return
     
+    normalized_website = _normalize_website(website)
+
     for entry in credentials:
-        if entry["website"] == website and entry["username"] == user: # user can't be on the same website twice
+        if _normalize_website(entry["website"]) == normalized_website and entry["username"] == user: # user can't be on the same website twice
             print("[!] This username on this website already exists.")
             return
     
@@ -126,9 +132,11 @@ def retrieve_credential(username, master_password, website):
         print("[!!!] Cannot retrieve. Aborting.")
         return
 
+    normalized_website = _normalize_website(website)
+
     #search for selected entery and print it if found, otherwise print not found message
     for entry in credentials:
-        if entry["website"] == website:
+        if _normalize_website(entry["website"]) == normalized_website:
             print(f"\n  Website:  {entry['website']}")
             print(f"  Username: {entry['username']}")
             print(f"  Password: {entry['password']}")
@@ -144,8 +152,10 @@ def update_credential(username, master_password, website, new_user, new_password
         print("[!!!] Cannot update. Aborting.")
         return
 
+    normalized_website = _normalize_website(website)
+
     for entry in credentials:
-        if entry["website"] == website:
+        if _normalize_website(entry["website"]) == normalized_website:
 
             if new_password != "" and new_password == entry["password"]:
                 print("[!] Warning: new password is the same as the current one.")
@@ -170,9 +180,11 @@ def delete_credential(username, master_password, website):
         print("[!!!] Cannot delete. Aborting.")
         return
 
+    normalized_website = _normalize_website(website)
+
     #search for the selected entry and delete it if found
     for i, entry in enumerate(credentials):
-        if entry["website"] == website:
+        if _normalize_website(entry["website"]) == normalized_website:
             credentials.pop(i)
             save_vault(username, master_password, credentials)
             print(f"[+] Credential for {website} deleted.")
