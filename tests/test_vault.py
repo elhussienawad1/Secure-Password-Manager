@@ -166,12 +166,13 @@ class TestUpdateCredential:
         _add()
         update_credential(TEST_USER, MASTER_PW, "ghost.com", new_user="x", new_password="y")
 
-    def test_update_with_wrong_password_fails(self):
+    def test_update_with_wrong_password_fails(self, capsys):
         _add("update.com", "alice", "old_pass")
-        try:
-            update_credential(TEST_USER, WRONG_PW, "update.com", new_user="hacker", new_password="hacked")
-        except Exception:
-            pass  # Expected
+        update_credential(TEST_USER, WRONG_PW, "update.com", new_user="hacker", new_password="hacked")
+        retrieve_credential(TEST_USER, MASTER_PW, "update.com")
+        out = capsys.readouterr().out
+        assert "hacker" not in out
+        assert "hacked" not in out
 
         # The stored credential must still be the original
         # (retrieve with correct pw and check hacker value is not there)
@@ -195,8 +196,7 @@ class TestDeleteCredential:
         delete_credential(TEST_USER, MASTER_PW, "todelete.com")
         retrieve_credential(TEST_USER, MASTER_PW, "todelete.com")
         out = capsys.readouterr().out
-        # After deletion, credentials should not appear
-        assert "pass" not in out
+        assert "todelete.com" not in out or "No credential found" in out
 
     def test_delete_nonexistent_website_does_not_crash(self):
         _add()
@@ -219,12 +219,12 @@ class TestDeleteCredential:
             sig_after = json.load(f)["signature"]
         assert sig_before != sig_after, "Signature should change after a deletion"
 
-    def test_delete_with_wrong_password_fails(self):
+    def test_delete_with_wrong_password_fails(self, capsys):
         _add("del.com", "user", "pass")
-        try:
-            delete_credential(TEST_USER, WRONG_PW, "del.com")
-        except Exception:
-            pass
+        delete_credential(TEST_USER, WRONG_PW, "del.com")
+        retrieve_credential(TEST_USER, MASTER_PW, "del.com")
+        out = capsys.readouterr().out
+        assert "user" in out or "pass" in out
 
 
 # ---------------------------------------------------------------------------
@@ -284,3 +284,18 @@ class TestEncryptionCorrectness:
             shutil.rmtree(os.path.join("data", user2), ignore_errors=True)
             if os.path.exists(f"{user2}_public.json"):
                 os.remove(f"{user2}_public.json")
+
+    def test_tampered_vault_is_detected(self, capsys):
+        _add("safe.com", "user", "pass")
+        
+        # manually corrupt the vault file
+        with open(VAULT_PATH, "r") as f:
+            data = json.load(f)
+        data["encrypted_vault"] = data["encrypted_vault"][:-10] + "0000000000"
+        with open(VAULT_PATH, "w") as f:
+            json.dump(data, f)
+        
+        retrieve_credential(TEST_USER, MASTER_PW, "safe.com")
+        out = capsys.readouterr().out
+        assert "pass" not in out
+
