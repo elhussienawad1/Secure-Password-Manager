@@ -7,7 +7,8 @@ from Crypto.Random import get_random_bytes
 
 from src.utltis import generate_large_prime
 from src.sign_verify import sign_vault, verify_vault
-from src.vault import decrypt_data, encrypt_data, load_vault, normalize_website, save_vault, vault_is_initialized
+from src.vault import decrypt_data, encrypt_data, load_vault, save_vault,normalize_website, vault_is_initialized
+
 from src.keygen import load_parameters 
 
 def generate_dh_parameters(bits: int = 512) -> dict:
@@ -54,7 +55,7 @@ def export_vault(username: str, master_password: str, recipient: str):
     # --- Device 1 signs its DH public key ---
     d1_pub_sig = sign_vault(username, str(d1_pub))
     r1, s1 = d1_pub_sig["r"], d1_pub_sig["s"]
-    print(f"[+] Device 1 DH public key generated and signed (r={r1}, s={s1})")
+    print(f"[+] Device 1 DH public key generated and signed")
 
     # --- Device 2 generates ephemeral DH key pair ---
     d2_priv = generate_private_key(q)
@@ -63,13 +64,7 @@ def export_vault(username: str, master_password: str, recipient: str):
     # --- Device 2 signs its DH public key ---
     d2_pub_sig = sign_vault(recipient, str(d2_pub))
     r2, s2 = d2_pub_sig["r"], d2_pub_sig["s"]
-    print(f"[+] Device 2 DH public key generated and signed (r={r2}, s={s2})")
-
-    # --- Device 1 verifies Device 2's signature ---
-    print("[*] Verifying Device 2's DH public key signature...")
-    if not verify_vault(recipient, str(d2_pub), r2, s2):
-        print("[!!!] Device 2 DH public key signature invalid. Aborting export.")
-        return (False, "Device 2 DH public key signature invalid.")
+    print(f"[+] Device 2 DH public key generated and signed")
 
     # --- Device 2 verifies Device 1's signature ---
     print("[*] Verifying Device 1's DH public key signature...")
@@ -77,6 +72,12 @@ def export_vault(username: str, master_password: str, recipient: str):
         print("[!!!] Device 1 DH public key signature invalid. Aborting export.")
         return (False, "Device 1 DH public key signature invalid.")
 
+    # --- Device 1 verifies Device 2's signature ---
+    print("[*] Verifying Device 2's DH public key signature...")
+    if not verify_vault(recipient, str(d2_pub), r2, s2):
+        print("[!!!] Device 2 DH public key signature invalid. Aborting export.")
+        return (False, "Device 2 DH public key signature invalid.")
+    
     print("[+] Both DH public key signatures verified successfully.")
 
     # --- Load Device 1's vault (encrypted + verified master password) ---
@@ -130,8 +131,7 @@ def export_vault(username: str, master_password: str, recipient: str):
     print(f"[+] Vault exported successfully to {export_path}")
     return (True, "Vault exported successfully.")
 
-
-def import_vault(username: str, master_password: str, sender: str):
+def import_vault(username: str, existing_master_password: str, new_master_password: str, sender: str):
     # --- Load export package ---
     export_path = os.path.join("data", "Export", f"{sender}_to_{username}.json")
     if not os.path.exists(export_path):
@@ -154,9 +154,9 @@ def import_vault(username: str, master_password: str, sender: str):
         d2_priv = json.load(f)["d2_priv"]
 
     # --- Recompute shared secret and session key ---
-    d1_pub = package["d1_dh_public"]
+    d1_pub        = package["d1_dh_public"]
     shared_secret = compute_shared_secret(d1_pub, d2_priv, q)
-    session_key = derive_session_key(shared_secret)
+    session_key   = derive_session_key(shared_secret)
 
     # --- Verify Device 1's signature over the session-encrypted data ---
     session_encrypted = package["session_encrypted"]
@@ -169,7 +169,7 @@ def import_vault(username: str, master_password: str, sender: str):
 
     print("[+] Transfer signature verified successfully.")
 
-    # --- Decrypt session-encrypted payload (JSON list of credential dicts) ---
+    # --- Decrypt session-encrypted payload ---
     plaintext_entries = decrypt_data(session_key, session_encrypted)
     if plaintext_entries is None:
         print("[!!!] Decryption failed. Data may be corrupted.")
@@ -185,24 +185,24 @@ def import_vault(username: str, master_password: str, sender: str):
         print("[!!!] Imported payload must be a list of credentials.")
         return
 
-    # --- Existing local vault (same format as vault.py: signature + AES-GCM) ---
-    vault_path = os.path.join("data", username, "vault.json")
+    # --- Load existing vault with existing_master_password (if any) ---
     existing_credentials = []
+    vault_path = os.path.join("data", username, "vault.json")
+
     if os.path.exists(vault_path):
-        existing_credentials = load_vault(username, master_password)
+        existing_credentials = load_vault(username, existing_master_password)
         if existing_credentials is None:
             print("[!] Failed to decrypt or verify existing vault. Wrong master password?")
             return
         print(f"[+] Loaded {len(existing_credentials)} existing credential(s).")
 
-    # Merge on (username, normalized website); imported entry wins on conflict
+    # --- Merge: imported entry wins on (username, website) conflict ---
     merged = {
         (entry["username"], normalize_website(entry["website"])): entry
         for entry in existing_credentials
     }
 
-    duplicates = 0
-    added = 0
+    added, duplicates = 0, 0
     for entry in incoming_credentials:
         key = (entry["username"], normalize_website(entry["website"]))
         if key in merged:
@@ -211,15 +211,11 @@ def import_vault(username: str, master_password: str, sender: str):
             added += 1
         merged[key] = entry
 
-    merged_list = list(merged.values())
+    print(f"[+] Merge complete: {added} new entry/entries added, "
+          f"{duplicates} duplicate(s) overwritten with imported data.")
 
-    print(
-        f"[+] Merge complete: {added} new entry/entries added, "
-        f"{duplicates} duplicate(s) overwritten with imported data."
-    )
-
-    save_vault(username, master_password, merged_list)
+    # --- Save merged vault encrypted with new_master_password ---
+    save_vault(username, new_master_password, list(merged.values()))
 
     os.remove(session_path)
-
     print(f"[+] Vault imported and merged successfully for '{username}'.")
